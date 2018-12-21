@@ -4,6 +4,9 @@ from torch.autograd.function import Function
 import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
+from torch.optim.lr_scheduler import StepLR
+
+import math
 import numpy as np
 from pdb import set_trace as bp
 
@@ -11,11 +14,15 @@ print("Pytorch version:  " + str(torch.__version__))
 use_cuda = torch.cuda.is_available()
 print("Use CUDA: " + str(use_cuda))
 
+FEATURE_SIZE = 3
 BATCH_SIZE = 64
 BATCH_SIZE_TEST = 1000
 EPOCHS = 50
 LOG_INTERVAL = 10
 NUM_OF_CLASSES = 10
+LR = 1e-1  # initial learning rate
+LR_STEP = 10
+LR_DECAY = 0.95  # when val_loss increase, LR = LR*LR_DECAY
 
 torch.manual_seed(1)
 device = torch.device("cuda" if use_cuda else "cpu")
@@ -48,8 +55,8 @@ class Net(nn.Module):
         self.conv5 = nn.Conv2d(in_channels=128, out_channels=512, kernel_size=krnl_sz, stride=strd, padding=1)
         self.conv6 = nn.Conv2d(in_channels=512, out_channels=512, kernel_size=krnl_sz, stride=strd, padding=1)
         self.prelu_weight = nn.Parameter(torch.Tensor(1).fill_(0.25))
-        self.fc1 = nn.Linear(3*3*512, 3)
-        self.fc3 = nn.Linear(3, 10)
+        self.fc1 = nn.Linear(3*3*512, FEATURE_SIZE)
+        self.fc3 = nn.Linear(FEATURE_SIZE, 10)
     def forward(self, x):
         mp_ks=2
         mp_strd=2
@@ -65,84 +72,86 @@ class Net(nn.Module):
         features3d = self.fc1(x)
         x = F.prelu(features3d, self.prelu_weight)
         x = self.fc3(x)
-        return F.log_softmax(x, dim=1), features3d
+        return x, features3d
 
-class CenterLoss(nn.Module):
-    def __init__(self, num_classes, feat_dim, size_average=True):
-        super(CenterLoss, self).__init__()
-        self.centers = nn.Parameter(torch.randn(num_classes, feat_dim))
-        self.centerlossfunc = CenterlossFunc.apply
-        self.feat_dim = feat_dim
-        self.size_average = size_average
+class ArcMarginProduct(nn.Module):
+    r"""Implement of large margin arc distance: :
+        Args:
+            in_features: size of each input sample
+            out_features: size of each output sample
+            s: norm of input feature
+            m: margin
 
-    def forward(self, label, feat):
-        batch_size = feat.size(0)
-        feat = feat.view(batch_size, -1)
-        # To check the dim of centers and features
-        if feat.size(1) != self.feat_dim:
-            raise ValueError("Center's dim: {0} should be equal to input feature's \
-                            dim: {1}".format(self.feat_dim,feat.size(1)))
-        batch_size_tensor = feat.new_empty(1).fill_(batch_size if self.size_average else 1)
-        loss = self.centerlossfunc(feat, label, self.centers, batch_size_tensor)
-        return loss
+            cos(theta + m)
+        """
+    def __init__(self, in_features, out_features, device, s=30.0, m=0.50, easy_margin=False):
+        super(ArcMarginProduct, self).__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.s = s
+        self.m = m
+        self.weight = nn.Parameter(torch.FloatTensor(out_features, in_features))
+        nn.init.xavier_uniform_(self.weight)
+        self.device = device
 
+        self.easy_margin = easy_margin
+        self.cos_m = math.cos(m)
+        self.sin_m = math.sin(m)
+        self.th = math.cos(math.pi - m)
+        self.mm = math.sin(math.pi - m) * m
 
-class CenterlossFunc(Function):
-    @staticmethod
-    def forward(ctx, feature, label, centers, batch_size):
-        ctx.save_for_backward(feature, label, centers, batch_size)
-        centers_batch = centers.index_select(0, label.long())
-        return (feature - centers_batch).pow(2).sum() / 2.0 / batch_size
+    def forward(self, input, label):
+        # --------------------------- cos(theta) & phi(theta) ---------------------------
+        cosine = F.linear(F.normalize(input), F.normalize(self.weight))
+        sine = torch.sqrt(1.0 - torch.pow(cosine, 2))
+        phi = cosine * self.cos_m - sine * self.sin_m
+        if self.easy_margin:
+            phi = torch.where(cosine > 0, phi, cosine)
+        else:
+            phi = torch.where(cosine > self.th, phi, cosine - self.mm)
+        # --------------------------- convert label to one-hot ---------------------------
+        # one_hot = torch.zeros(cosine.size(), requires_grad=True, device='cuda')
+        one_hot = torch.zeros(cosine.size(), device=self.device)
+        one_hot.scatter_(1, label.view(-1, 1).long(), 1)
+        # -------------torch.where(out_i = {x_i if condition_i else y_i) -------------
+        output = (one_hot * phi) + ((1.0 - one_hot) * cosine)  # you can use torch.where if your torch.__version__ is 0.4
+        output *= self.s
+        # print(output)
 
-    @staticmethod
-    def backward(ctx, grad_output):
-        feature, label, centers, batch_size = ctx.saved_tensors
-        centers_batch = centers.index_select(0, label.long())
-        diff = centers_batch - feature
-        # init every iteration
-        counts = centers.new_ones(centers.size(0))
-        ones = centers.new_ones(label.size(0))
-        grad_centers = centers.new_zeros(centers.size())
+        return output
 
-        counts = counts.scatter_add_(0, label.long(), ones)
-        grad_centers.scatter_add_(0, label.unsqueeze(1).expand(feature.size()).long(), diff)
-        grad_centers = grad_centers/counts.view(-1, 1)
-        return - grad_output * diff / batch_size, None, grad_centers / batch_size, None
-
-def centerLoss(pred, target, device, features3d):
-  # NLLLoss
-  nllloss = nn.NLLLoss().to(device) #CrossEntropyLoss = log_softmax + NLLLoss
-  # CenterLoss
-  loss_weight = 1
-  centerloss = CenterLoss(NUM_OF_CLASSES , 3).to(device) # 3 num of features
-  return nllloss(pred, target) + loss_weight * centerloss(target, features3d)
-
-def train(model, device, train_loader, optimizer, epoch):
+def train(model, metric_fc, criterion, device, train_loader, optimizer, epoch):
     model.train()
-    for batch_idx, (data, target) in enumerate(train_loader):
-        data, target = data.to(device), target.to(device)
-        optimizer.zero_grad()
+    for batch_idx, (data, labels) in enumerate(train_loader):
+        data, labels = data.to(device), labels.to(device)
         pred, features3d = model(data)
 
-        loss = centerLoss(pred, target, device, features3d)
-  
+        output = metric_fc(features3d, labels)
+        loss = criterion(output, labels)
+
+        optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+  
         if batch_idx % LOG_INTERVAL == 0:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
                 100. * batch_idx / len(train_loader), loss.item()))
 
-def test(model, device, test_loader):
+
+def test(model, metric_fc, criterion, device, test_loader):
     model.eval()
     test_loss = 0
     correct = 0
     with torch.no_grad():
-        for data, target in test_loader:
-            data, target = data.to(device), target.to(device)
-            output,features3d = model(data)
+        for data, labels in test_loader:
+            data, labels = data.to(device), labels.to(device)
+            pred,features3d = model(data)
             
-            test_loss += centerLoss(output, target, device, features3d)
+            output = metric_fc(features3d, labels)
+            test_loss += criterion(output, labels)
+
+            # test_loss += centerLoss(output, target, device, features3d)
 
             pred = output.max(1, keepdim=True)[1] # get the index of the max log-probability
             correct += pred.eq(target.view_as(pred)).sum().item()
@@ -156,11 +165,21 @@ def test(model, device, test_loader):
 ##########################################################
 
 model = Net().to(device)
-optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.5)
+model.to(device)
+
+metric_fc = ArcMarginProduct(FEATURE_SIZE, NUM_OF_CLASSES, device, s=30, m=0.5, easy_margin=False).to(device)
+metric_fc.to(device)
+
+criterion = torch.nn.CrossEntropyLoss()
+
+optimizer = torch.optim.Adam([{'params': model.parameters()}, {'params': metric_fc.parameters()}],
+                                     lr=LR, weight_decay=LR_DECAY)
+
+scheduler = StepLR(optimizer, step_size=LR_STEP, gamma=0.1)
 
 for epoch in range(1, EPOCHS + 1):
-    train(model, device, train_loader, optimizer, epoch)
-    test(model, device, test_loader)
+    train(model, metric_fc, criterion, device, train_loader, optimizer, epoch)
+    test(model, metric_fc, criterion, device, test_loader)
 
 torch.save(model.state_dict(),"mnist_cnn-arcface-loss.pt")
         
