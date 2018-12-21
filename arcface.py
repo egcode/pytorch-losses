@@ -154,7 +154,7 @@ def test(model, metric_fc, criterion, device, test_loader):
             # test_loss += centerLoss(output, target, device, features3d)
 
             pred = output.max(1, keepdim=True)[1] # get the index of the max log-probability
-            correct += pred.eq(target.view_as(pred)).sum().item()
+            correct += pred.eq(labels.view_as(pred)).sum().item()
 
     test_loss /= len(test_loader.dataset)
   
