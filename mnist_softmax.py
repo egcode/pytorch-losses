@@ -83,19 +83,37 @@ class Net(nn.Module):
         return x, features3d, features2d
 
 
-def loss_function(output, target):
-  return F.nll_loss(F.log_softmax(output, dim=1), target)
+class CrossEntropyCustom(nn.Module):
+
+    def __init__(self, gamma=0, eps=1e-7):
+        super(CrossEntropyCustom, self).__init__()
+        self.gamma = gamma
+        self.eps = eps
+        self.ce = torch.nn.CrossEntropyLoss()
+
+    def forward(self, input, target):
+        # logp = self.ce(input, target)
+        # p = torch.exp(-logp)
+        # loss = (1 - p) ** self.gamma * logp
+        return self.ce(input, target)
+
+
+
+# def loss_function(output, target):
+#   return F.nll_loss(F.log_softmax(output, dim=1), target)
   
 
-def train(model, device, train_loader, optimizer, epoch):
+def train(model, loss_custom, device, train_loader, optimizer, epoch):
     model.train()
     for batch_idx, (data, target) in enumerate(train_loader):
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
         output,_,_ = model(data)
         
-        loss = loss_function(output, target)
-        
+        # loss = loss_function(output, target)
+        loss = loss_custom(output, target)
+
+
         loss.backward()
         optimizer.step()
         if batch_idx % LOG_INTERVAL == 0:
@@ -130,7 +148,9 @@ def train(model, device, train_loader, optimizer, epoch):
 model = Net().to(device)
 optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.5)
 
+loss_custom = CrossEntropyCustom().to(device)
+
 for epoch in range(1, EPOCHS + 1):
-    train(model, device, train_loader, optimizer, epoch)
+    train(model, loss_custom, device, train_loader, optimizer, epoch)
     # test(model, device, test_loader)
         
