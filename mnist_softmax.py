@@ -14,6 +14,7 @@ BATCH_SIZE = 64
 BATCH_SIZE_TEST = 1000
 EPOCHS = 20
 LOG_INTERVAL = 10
+NUM_OF_CLASSES = 10
 
 
 torch.manual_seed(1)
@@ -100,11 +101,15 @@ class CrossEntropyCustom(nn.Module):
 
         target = target.cpu() ## To remove error on gpu
         ## ONE HOT
-        target_one_hot = torch.zeros(len(target), target.max()+1).scatter_(1, target.unsqueeze(1), 1.)        
+        # target_one_hot = torch.zeros(len(target), target.max()+1).scatter_(1, target.unsqueeze(1), 1.)        
+        target_one_hot = torch.zeros(len(target), NUM_OF_CLASSES).scatter_(1, target.unsqueeze(1), 1.)        
 
         # Cross Entropy Loss
         m = input.shape[0] 
         log_hat = -torch.log(softmax)
+        if (target_one_hot.shape != log_hat.shape):
+            bp()
+
         cross_entropy = (torch.sum(torch.mul(target_one_hot, log_hat)))
         loss = (1./m) * cross_entropy
 
