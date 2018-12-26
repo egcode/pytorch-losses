@@ -96,10 +96,12 @@ class CrossEntropyCustom(nn.Module):
         exps = torch.exp(input)
         softmax = exps / torch.sum(exps)
         
-        
+        ## ONE HOT
+        target_one_hot = torch.zeros(len(target), target.max()+1).scatter_(1, target.unsqueeze(1), 1.)        
 
+        m = input.shape[0] 
         log_hat = -torch.log(softmax)
-        cross_entropy = (torch.sum(torch.mul(target, log_hat)))
+        cross_entropy = (torch.sum(torch.mul(target_one_hot, log_hat)))
         loss = (1./m) * cross_entropy
 
         loss = torch.squeeze(loss)      # To make sure your cost's shape is what we expect (e.g. this turns [[17]] into 17).
