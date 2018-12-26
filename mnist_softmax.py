@@ -93,12 +93,16 @@ class CrossEntropyCustom(nn.Module):
 
     def forward(self, input, target):
 
+        #Softmax
         exps = torch.exp(input)
         softmax = exps / torch.sum(exps)
-        
+        softmax = softmax.cpu()
+
+        target = target.cpu() ## To remove error on gpu
         ## ONE HOT
         target_one_hot = torch.zeros(len(target), target.max()+1).scatter_(1, target.unsqueeze(1), 1.)        
 
+        # Cross Entropy Loss
         m = input.shape[0] 
         log_hat = -torch.log(softmax)
         cross_entropy = (torch.sum(torch.mul(target_one_hot, log_hat)))
@@ -106,16 +110,8 @@ class CrossEntropyCustom(nn.Module):
 
         loss = torch.squeeze(loss)      # To make sure your cost's shape is what we expect (e.g. this turns [[17]] into 17).
         
-        # logp = self.ce(input, target)
-        # p = torch.exp(-logp)
-        # loss = (1 - p) ** self.gamma * logp
-        # return self.ce(input, target)
         return loss
 
-
-# def loss_function(output, target):
-#   return F.nll_loss(F.log_softmax(output, dim=1), target)
-  
 
 def train(model, loss_custom, device, train_loader, optimizer, epoch):
     model.train()
@@ -124,9 +120,7 @@ def train(model, loss_custom, device, train_loader, optimizer, epoch):
         optimizer.zero_grad()
         output,_,_ = model(data)
         
-        # loss = loss_function(output, target)
         loss = loss_custom(output, target)
-
 
         loss.backward()
         optimizer.step()
@@ -135,27 +129,26 @@ def train(model, loss_custom, device, train_loader, optimizer, epoch):
                 epoch, batch_idx * len(data), len(train_loader.dataset),
                 100. * batch_idx / len(train_loader), loss.item()))
 
-# def test(model, device, test_loader):
-#     model.eval()
-#     test_loss = 0
-#     correct = 0
-#     with torch.no_grad():
-#         for data, target in test_loader:
-#             data, target = data.to(device), target.to(device)
-#             output,_,_ = model(data)
+def test(model, loss_custom, device, test_loader):
+    model.eval()
+    test_loss = 0
+    correct = 0
+    with torch.no_grad():
+        for data, target in test_loader:
+            data, target = data.to(device), target.to(device)
+            output,_,_ = model(data)
             
-# #             test_loss += F.nll_loss(F.log_softmax(output, dim=1), target).item() # sum up batch loss
+            # test_loss += loss_function(output, target).item() # sum up batch loss
+            test_loss += loss_custom(output, target).item() # sum up batch loss
 
-#             test_loss += loss_function(output, target).item() # sum up batch loss
+            pred = output.max(1, keepdim=True)[1] # get the index of the max log-probability
+            correct += pred.eq(target.view_as(pred)).sum().item()
 
-#             pred = output.max(1, keepdim=True)[1] # get the index of the max log-probability
-#             correct += pred.eq(target.view_as(pred)).sum().item()
+    test_loss /= len(test_loader.dataset)
 
-#     test_loss /= len(test_loader.dataset)
-
-#     print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-#         test_loss, correct, len(test_loader.dataset),
-#         100. * correct / len(test_loader.dataset)))
+    print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
+        test_loss, correct, len(test_loader.dataset),
+        100. * correct / len(test_loader.dataset)))
 
 
 
@@ -166,5 +159,6 @@ loss_custom = CrossEntropyCustom().to(device)
 
 for epoch in range(1, EPOCHS + 1):
     train(model, loss_custom, device, train_loader, optimizer, epoch)
-    # test(model, device, test_loader)
-        
+    test(model, loss_custom, device, test_loader)
+
+torch.save(model.state_dict(),"mnist_cnn-softmax2.pt")        
