@@ -200,5 +200,4 @@ loss_custom = CrossEntropyCustom().to(device)
 for epoch in range(1, EPOCHS + 1):
     train(model, loss_custom, device, train_loader, optimizer, epoch)
     test(model, loss_custom, device, test_loader)
-    if (epoch == 8):
-          torch.save(model.state_dict(),"mnist_cnn-softmax2.pt")        
+torch.save(model.state_dict(),"mnist_cnn-softmax2.pt")        
