@@ -92,11 +92,23 @@ class CrossEntropyCustom(nn.Module):
         self.ce = torch.nn.CrossEntropyLoss()
 
     def forward(self, input, target):
+
+        exps = torch.exp(input)
+        softmax = exps / torch.sum(exps)
+        
+        
+
+        log_hat = -torch.log(softmax)
+        cross_entropy = (torch.sum(torch.mul(target, log_hat)))
+        loss = (1./m) * cross_entropy
+
+        loss = torch.squeeze(loss)      # To make sure your cost's shape is what we expect (e.g. this turns [[17]] into 17).
+        
         # logp = self.ce(input, target)
         # p = torch.exp(-logp)
         # loss = (1 - p) ** self.gamma * logp
-        return self.ce(input, target)
-
+        # return self.ce(input, target)
+        return loss
 
 
 # def loss_function(output, target):
