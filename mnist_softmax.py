@@ -9,6 +9,7 @@ print("Pytorch version:  " + str(torch.__version__))
 use_cuda = torch.cuda.is_available()
 print("Use CUDA: " + str(use_cuda))
 from pdb import set_trace as bp
+torch.set_printoptions(threshold=1000000)
 
 BATCH_SIZE = 64
 BATCH_SIZE_TEST = 1000
@@ -86,36 +87,63 @@ class Net(nn.Module):
 
 class CrossEntropyCustom(nn.Module):
 
-    def __init__(self, gamma=0, eps=1e-7):
+    def __init__(self):
         super(CrossEntropyCustom, self).__init__()
-        self.gamma = gamma
-        self.eps = eps
-        self.ce = torch.nn.CrossEntropyLoss()
+        self.sm = nn.Softmax()
+        self.lsm = nn.LogSoftmax()
+
+        self.nll = nn.NLLLoss()
 
     def forward(self, input, target):
 
         #Softmax
-        exps = torch.exp(input)
-        softmax = exps / torch.sum(exps)
-        softmax = softmax.cpu()
+        # exps = torch.exp(input)
+        # probabilities = exps / torch.sum(exps)
+        # probabilities = probabilities.cpu()
 
-        target = target.cpu() ## To remove error on gpu
-        ## ONE HOT
-        # target_one_hot = torch.zeros(len(target), target.max()+1).scatter_(1, target.unsqueeze(1), 1.)        
-        target_one_hot = torch.zeros(len(target), NUM_OF_CLASSES).scatter_(1, target.unsqueeze(1), 1.)        
+        #Stable Softmax
+        # exps = torch.exp(input - torch.max(input))
+        # probabilities = exps / torch.sum(exps)
+        # probabilities = probabilities.cpu()
 
-        # Cross Entropy Loss
-        m = input.shape[0] 
-        log_hat = -torch.log(softmax)
-        if (target_one_hot.shape != log_hat.shape):
-            bp()
+        #Pytorch Softmax
+        # probabilities = self.sm(input).cpu()
+        log_probabilities = self.lsm(input).cpu()
 
-        cross_entropy = (torch.sum(torch.mul(target_one_hot, log_hat)))
-        loss = (1./m) * cross_entropy
+        # NLLLoss(x, class) = -weights[class] * x[class]
+        # log_probabilities = torch.log(probabilities)
 
-        loss = torch.squeeze(loss)      # To make sure your cost's shape is what we expect (e.g. this turns [[17]] into 17).
+
+        return F.nll_loss(log_probabilities, target.cpu()).cpu()
+
+
+        # target = target.cpu() ## To remove error on gpu
+        # ## ONE HOT
+        # # target_one_hot = torch.zeros(len(target), target.max()+1).scatter_(1, target.unsqueeze(1), 1.)        
+        # target_one_hot = torch.zeros(len(target), NUM_OF_CLASSES).scatter_(1, target.unsqueeze(1), 1.)        
+
+        # # Cross Entropy Loss
+        # m = input.shape[0] 
+        # log_probabilities = torch.log(probabilities)
+        # # if (target_one_hot.shape != log_hat.shape):
+        # #     bp()
+
+        # mlt = torch.mul(target_one_hot, log_probabilities) # sometimes some values could be nan
+        # if (torch.isnan(torch.sum(mlt))):
+        #     bp()
+
+        # mlt[mlt != mlt] = 0 ## Remove nan values
+        # cross_entropy = -torch.sum(mlt)
+        # loss = (1./m) * cross_entropy
+
+        # loss = torch.squeeze(loss)      # To make sure your cost's shape is what we expect (e.g. this turns [[17]] into 17).
         
-        return loss
+        # # if (torch.isnan(loss)):
+        # #     bp()
+        # # if (loss == 0.):
+        # #     bp()
+
+        # return loss
 
 
 def train(model, loss_custom, device, train_loader, optimizer, epoch):
@@ -127,8 +155,12 @@ def train(model, loss_custom, device, train_loader, optimizer, epoch):
         
         loss = loss_custom(output, target)
 
-        loss.backward()
-        optimizer.step()
+        optimizer.zero_grad() # clear previous gradients
+        loss.backward() # compute gradients of all variables wrt loss
+
+        df = nn.CrossEntropyLoss()
+        optimizer.step() # perform updates using calculated gradients
+
         if batch_idx % LOG_INTERVAL == 0:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
@@ -157,7 +189,10 @@ def test(model, loss_custom, device, test_loader):
 
 
 
-model = Net().to(device)
+model = Net()
+# model.load_state_dict(torch.load("mnist_cnn-softmax2.pt"))
+model = model.to(device)
+
 optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.5)
 
 loss_custom = CrossEntropyCustom().to(device)
@@ -165,5 +200,5 @@ loss_custom = CrossEntropyCustom().to(device)
 for epoch in range(1, EPOCHS + 1):
     train(model, loss_custom, device, train_loader, optimizer, epoch)
     test(model, loss_custom, device, test_loader)
-
-torch.save(model.state_dict(),"mnist_cnn-softmax2.pt")        
+    if (epoch == 8):
+          torch.save(model.state_dict(),"mnist_cnn-softmax2.pt")        
