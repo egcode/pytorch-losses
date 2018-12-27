@@ -102,16 +102,16 @@ class CrossEntropyCustom(nn.Module):
         # probabilities = probabilities.cpu()
 
         #Stable Softmax
-        # exps = torch.exp(input - torch.max(input))
-        # probabilities = exps / torch.sum(exps)
-        # probabilities = probabilities.cpu()
+        exps = torch.exp(input - torch.max(input))
+        probabilities = exps / torch.sum(exps)
+        probabilities = probabilities.cpu()
 
         #Pytorch Softmax
         # probabilities = self.sm(input).cpu()
-        log_probabilities = self.lsm(input).cpu()
+        # log_probabilities = self.lsm(input).cpu()
 
         # NLLLoss(x, class) = -weights[class] * x[class]
-        # log_probabilities = torch.log(probabilities)
+        log_probabilities = torch.log(probabilities)
 
 
         return F.nll_loss(log_probabilities, target.cpu()).cpu()
