@@ -205,6 +205,6 @@ for epoch in range(20):
     # print optimizer4nn.param_groups[0]['lr']
     train(train_loader, model, criterion, [optimizer4nn, optimzer4center], epoch + 1, loss_weight, use_cuda)
     test(test_loader, criterion, model, use_cuda)
-torch.save(model.state_dict(),"mnist_cnn-softmax2.pt")        
+torch.save(model.state_dict(),"mnist_cnn-cosface.pt")        
 
 
