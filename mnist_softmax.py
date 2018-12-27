@@ -98,23 +98,62 @@ class CrossEntropyCustom(nn.Module):
 
         #Softmax
         # exps = torch.exp(input)
-        # probabilities = exps / torch.sum(exps)
-        # probabilities = probabilities.cpu()
+        # probabilities00 = exps / torch.sum(exps)
+        # probabilities00 = probabilities00.cpu()
 
         #Stable Softmax
-        exps = torch.exp(input - torch.max(input))
-        probabilities = exps / torch.sum(exps)
-        probabilities = probabilities.cpu()
+        # exps = torch.exp(input - torch.max(input))
+        # probabilities11 = exps / torch.sum(exps)
+        # probabilities11 = probabilities11.cpu()
 
         #Pytorch Softmax
-        # probabilities = self.sm(input).cpu()
-        # log_probabilities = self.lsm(input).cpu()
+        # probabilities22 = self.sm(input).cpu()
 
-        # NLLLoss(x, class) = -weights[class] * x[class]
-        log_probabilities = torch.log(probabilities)
+        #Stable Logsoftmax - Not nan but weird
+        # b = torch.max(input)
+        # log_probabilities = (input - b) - torch.log(torch.sum(torch.exp(input - b)))
 
 
-        return F.nll_loss(log_probabilities, target.cpu()).cpu()
+        # Stable Logsoftmax2 - NAN
+        # b = torch.max(input)
+        # log_probabilities = input - (torch.log(torch.sum(torch.exp(input - b)) + b))
+
+
+        # --- Pytorch WORKING Logsoftmax
+        log_probabilities = self.lsm(input).cpu()
+
+        # bp()
+
+        ######################################################
+        ## NLLLoss 
+
+        # log_probabilities = torch.log(probabilities)
+
+        target = target.cpu() ## To remove error on gpu
+        log_probabilities = log_probabilities.cpu() ## To remove error on gpu
+
+        m = target.shape[0]
+        cross_entropy = torch.zeros(log_probabilities.size())
+        for i in range(m):
+            # print("\n")
+            # print("iter: " + str(i))
+            value = log_probabilities[i,target[i].long()]
+            # print(value)
+            # value = value.clamp(min=1e-12, max=1e+12) # for numerical stability
+            cross_entropy[i,target[i].long()] = value
+            # print("\n")
+
+        # print("cross_entropy: ")
+        # print(cross_entropy)
+        # bp()
+
+
+
+        loss = -(1./m) * torch.sum(cross_entropy)
+        # loss = torch.squeeze(loss)
+
+        # return F.nll_loss(log_probabilities.cpu(), target.cpu()).cpu()
+        return loss
 
 
         # target = target.cpu() ## To remove error on gpu
