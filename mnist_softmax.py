@@ -99,38 +99,6 @@ class CrossEntropyCustom(nn.Module):
         ######################################################
         #################### Log Softmax #########################
 
-        #Softmax
-        # exps = torch.exp(input)
-        # probabilities00 = exps / torch.sum(exps)
-        # probabilities00 = probabilities00.cpu()
-
-        #Stable Softmax
-        # exps = torch.exp(input - torch.max(input))
-        # probabilities11 = exps / torch.sum(exps)
-        # probabilities11 = probabilities11.cpu()
-
-        #Pytorch Softmax
-        # probabilities22 = self.sm(input).cpu()
-
-        #Stable Logsoftmax - Not nan but weird
-        # b = torch.max(input)
-        # log_probabilities = (input - b) - torch.log(torch.sum(torch.exp(input - b)))
-
-
-        # Stable Logsoftmax2 - nan
-        # b = torch.max(input)
-        # log_probabilities = input - (torch.log(torch.sum(torch.exp(input - b)) + b))
-
-
-        # # Stable Logsoftmax -  Not nan close to original
-        # b = torch.max(input)
-        # presum = torch.exp(input - b)
-        # prelog = presum.sum(-1).unsqueeze(-1)
-        # prelog = prelog.clamp(min=1e-12, max=1e+12) # for numerical stability
-        # log = torch.log(prelog)
-        # log_probabilities = (input - b) - log
-
-
         # Stable Logsoftmax - 
         b = torch.max(input)
         presum = torch.exp(input - b)
@@ -138,8 +106,6 @@ class CrossEntropyCustom(nn.Module):
         prelog = prelog.clamp(min=1e-22, max=1e+22) # for numerical stability
         log = torch.log(prelog)
         log_probabilities = (input - b) - log
-
-
 
         # --- Pytorch WORKING Logsoftmax
         # log_probabilities = self.lsm(input).cpu()
@@ -163,38 +129,8 @@ class CrossEntropyCustom(nn.Module):
         # target_one_hot = torch.zeros(len(target), NUM_OF_CLASSES).scatter_(1, target.unsqueeze(1), 1.)        
         # cross_entropy = torch.addcmul(torch.zeros(log_probabilities.size()), 1., log_probabilities, target_one_hot)
 
-
         loss = -(1./m) * torch.sum(cross_entropy)
         return loss
-
-
-        # target = target.cpu() ## To remove error on gpu
-        # ## ONE HOT
-        # # target_one_hot = torch.zeros(len(target), target.max()+1).scatter_(1, target.unsqueeze(1), 1.)        
-        # target_one_hot = torch.zeros(len(target), NUM_OF_CLASSES).scatter_(1, target.unsqueeze(1), 1.)        
-
-        # # Cross Entropy Loss
-        # m = input.shape[0] 
-        # log_probabilities = torch.log(probabilities)
-        # # if (target_one_hot.shape != log_hat.shape):
-        # #     bp()
-
-        # mlt = torch.mul(target_one_hot, log_probabilities) # sometimes some values could be nan
-        # if (torch.isnan(torch.sum(mlt))):
-        #     bp()
-
-        # mlt[mlt != mlt] = 0 ## Remove nan values
-        # cross_entropy = -torch.sum(mlt)
-        # loss = (1./m) * cross_entropy
-
-        # loss = torch.squeeze(loss)      # To make sure your cost's shape is what we expect (e.g. this turns [[17]] into 17).
-        
-        # # if (torch.isnan(loss)):
-        # #     bp()
-        # # if (loss == 0.):
-        # #     bp()
-
-        # return loss
 
 
 def train(model, loss_custom, device, train_loader, optimizer, epoch):
