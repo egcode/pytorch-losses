@@ -96,6 +96,9 @@ class CrossEntropyCustom(nn.Module):
 
     def forward(self, input, target):
 
+        ######################################################
+        #################### Log Softmax #########################
+
         #Softmax
         # exps = torch.exp(input)
         # probabilities00 = exps / torch.sum(exps)
@@ -122,37 +125,26 @@ class CrossEntropyCustom(nn.Module):
         # --- Pytorch WORKING Logsoftmax
         log_probabilities = self.lsm(input).cpu()
 
-        # bp()
 
         ######################################################
-        ## NLLLoss 
-
-        # log_probabilities = torch.log(probabilities)
+        #################### NLLLoss #########################
 
         target = target.cpu() ## To remove error on gpu
         log_probabilities = log_probabilities.cpu() ## To remove error on gpu
 
-        m = target.shape[0]
+        ## NLLLoss V1
         cross_entropy = torch.zeros(log_probabilities.size())
+        m = target.shape[0]
         for i in range(m):
-            # print("\n")
-            # print("iter: " + str(i))
             value = log_probabilities[i,target[i].long()]
-            # print(value)
-            # value = value.clamp(min=1e-12, max=1e+12) # for numerical stability
             cross_entropy[i,target[i].long()] = value
-            # print("\n")
 
-        # print("cross_entropy: ")
-        # print(cross_entropy)
-        # bp()
-
+        ## NLLLoss V2
+        # target_one_hot = torch.zeros(len(target), NUM_OF_CLASSES).scatter_(1, target.unsqueeze(1), 1.)        
+        # cross_entropy = torch.addcmul(torch.zeros(log_probabilities.size()), 1., log_probabilities, target_one_hot)
 
 
         loss = -(1./m) * torch.sum(cross_entropy)
-        # loss = torch.squeeze(loss)
-
-        # return F.nll_loss(log_probabilities.cpu(), target.cpu()).cpu()
         return loss
 
 
