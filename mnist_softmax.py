@@ -103,7 +103,7 @@ class CrossEntropyCustom(nn.Module):
         b = torch.max(input)
         presum = torch.exp(input - b)
         prelog = presum.sum(-1).unsqueeze(-1)
-        prelog = prelog.clamp(min=1e-22, max=1e+22) # for numerical stability
+        prelog = prelog.clamp(min=1e-33, max=1e+33) # for numerical stability
         log = torch.log(prelog)
         log_probabilities = (input - b) - log
 
