@@ -117,13 +117,32 @@ class CrossEntropyCustom(nn.Module):
         # log_probabilities = (input - b) - torch.log(torch.sum(torch.exp(input - b)))
 
 
-        # Stable Logsoftmax2 - NAN
+        # Stable Logsoftmax2 - nan
         # b = torch.max(input)
         # log_probabilities = input - (torch.log(torch.sum(torch.exp(input - b)) + b))
 
 
+        # # Stable Logsoftmax -  Not nan close to original
+        # b = torch.max(input)
+        # presum = torch.exp(input - b)
+        # prelog = presum.sum(-1).unsqueeze(-1)
+        # prelog = prelog.clamp(min=1e-12, max=1e+12) # for numerical stability
+        # log = torch.log(prelog)
+        # log_probabilities = (input - b) - log
+
+
+        # Stable Logsoftmax - 
+        b = torch.max(input)
+        presum = torch.exp(input - b)
+        prelog = presum.sum(-1).unsqueeze(-1)
+        prelog = prelog.clamp(min=1e-22, max=1e+22) # for numerical stability
+        log = torch.log(prelog)
+        log_probabilities = (input - b) - log
+
+
+
         # --- Pytorch WORKING Logsoftmax
-        log_probabilities = self.lsm(input).cpu()
+        # log_probabilities = self.lsm(input).cpu()
 
 
         ######################################################
@@ -132,9 +151,10 @@ class CrossEntropyCustom(nn.Module):
         target = target.cpu() ## To remove error on gpu
         log_probabilities = log_probabilities.cpu() ## To remove error on gpu
 
+        m = target.shape[0]
+
         ## NLLLoss V1
         cross_entropy = torch.zeros(log_probabilities.size())
-        m = target.shape[0]
         for i in range(m):
             value = log_probabilities[i,target[i].long()]
             cross_entropy[i,target[i].long()] = value
