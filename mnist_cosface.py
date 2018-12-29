@@ -1,5 +1,3 @@
-
-
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -9,53 +7,102 @@ from torchvision import datasets
 from torch.utils.data import DataLoader
 import torch.optim.lr_scheduler as lr_scheduler
 
+from pdb import set_trace as bp
+
 from torch.autograd.function import Function
 import torch.nn.functional as F
-
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-
 import numpy as np
-%matplotlib inline
 
-batch_size = 100
+BATCH_SIZE = 100
+FEATURES_DIM = 3
 
+# class Net(nn.Module):
+#     def __init__(self):
+#         super(Net, self).__init__()
+#         self.conv1_1 = nn.Conv2d(1, 32, kernel_size=5, padding=2)
+#         self.prelu1_1 = nn.PReLU()
+#         self.conv1_2 = nn.Conv2d(32, 32, kernel_size=5, padding=2)
+#         self.prelu1_2 = nn.PReLU()
+#         self.conv2_1 = nn.Conv2d(32, 64, kernel_size=5, padding=2)
+#         self.prelu2_1 = nn.PReLU()
+#         self.conv2_2 = nn.Conv2d(64, 64, kernel_size=5, padding=2)
+#         self.prelu2_2 = nn.PReLU()
+#         self.conv3_1 = nn.Conv2d(64, 128, kernel_size=5, padding=2)
+#         self.prelu3_1 = nn.PReLU()
+#         self.conv3_2 = nn.Conv2d(128, 128, kernel_size=5, padding=2)
+#         self.prelu3_2 = nn.PReLU()
+#         self.preluip1 = nn.PReLU()
+#         self.ip1 = nn.Linear(128 * 3 * 3, FEATURES_DIM)
+#         self.ip2 = nn.Linear(FEATURES_DIM, 10)
 
+#     def forward(self, x):
+#         x = self.prelu1_1(self.conv1_1(x))
+#         x = self.prelu1_2(self.conv1_2(x))
+#         x = F.max_pool2d(x, 2)
+#         x = self.prelu2_1(self.conv2_1(x))
+#         x = self.prelu2_2(self.conv2_2(x))
+#         x = F.max_pool2d(x, 2)
+#         x = self.prelu3_1(self.conv3_1(x))
+#         x = self.prelu3_2(self.conv3_2(x))
+#         x = F.max_pool2d(x, 2)
+#         x = x.view(-1, 128 * 3 * 3)
+#         ip1 = self.preluip1(self.ip1(x))
+#         ip2 = self.ip2(ip1)
+#         return ip1, ip2
 
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
-        self.conv1_1 = nn.Conv2d(1, 32, kernel_size=5, padding=2)
+        krnl_sz=3
+        strd = 1
+                    
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=20, kernel_size=krnl_sz, stride=strd, padding=1)
+        self.conv2 = nn.Conv2d(in_channels=20, out_channels=50, kernel_size=krnl_sz, stride=strd, padding=1)
         self.prelu1_1 = nn.PReLU()
-        self.conv1_2 = nn.Conv2d(32, 32, kernel_size=5, padding=2)
         self.prelu1_2 = nn.PReLU()
-        self.conv2_1 = nn.Conv2d(32, 64, kernel_size=5, padding=2)
+        
+        self.conv3 = nn.Conv2d(in_channels=50, out_channels=64, kernel_size=krnl_sz, stride=strd, padding=1)
+        self.conv4 = nn.Conv2d(in_channels=64, out_channels=128, kernel_size=krnl_sz, stride=strd, padding=1)
         self.prelu2_1 = nn.PReLU()
-        self.conv2_2 = nn.Conv2d(64, 64, kernel_size=5, padding=2)
         self.prelu2_2 = nn.PReLU()
-        self.conv3_1 = nn.Conv2d(64, 128, kernel_size=5, padding=2)
+
+        self.conv5 = nn.Conv2d(in_channels=128, out_channels=512, kernel_size=krnl_sz, stride=strd, padding=1)
+        self.conv6 = nn.Conv2d(in_channels=512, out_channels=512, kernel_size=krnl_sz, stride=strd, padding=1)
         self.prelu3_1 = nn.PReLU()
-        self.conv3_2 = nn.Conv2d(128, 128, kernel_size=5, padding=2)
         self.prelu3_2 = nn.PReLU()
-        self.preluip1 = nn.PReLU()
-        self.ip1 = nn.Linear(128 * 3 * 3, 2)
-        self.ip2 = nn.Linear(2, 10)
+
+        self.prelu_weight = nn.Parameter(torch.Tensor(1).fill_(0.25))
+
+        self.fc1 = nn.Linear(3*3*512, 3)
+        # self.fc2 = nn.Linear(3, 2)
+        self.fc3 = nn.Linear(3, 10)
 
     def forward(self, x):
-        x = self.prelu1_1(self.conv1_1(x))
-        x = self.prelu1_2(self.conv1_2(x))
-        x = F.max_pool2d(x, 2)
-        x = self.prelu2_1(self.conv2_1(x))
-        x = self.prelu2_2(self.conv2_2(x))
-        x = F.max_pool2d(x, 2)
-        x = self.prelu3_1(self.conv3_1(x))
-        x = self.prelu3_2(self.conv3_2(x))
-        x = F.max_pool2d(x, 2)
-        x = x.view(-1, 128 * 3 * 3)
-        ip1 = self.preluip1(self.ip1(x))
-        ip2 = self.ip2(ip1)
-        return ip1, ip2
+        mp_ks=2
+        mp_strd=2
+
+        x = self.prelu1_1(self.conv1(x))
+        x = self.prelu1_2(self.conv2(x))
+        x = F.max_pool2d(x, kernel_size=mp_ks, stride=mp_strd)
+
+        x = self.prelu2_1(self.conv3(x))
+        x = self.prelu2_2(self.conv4(x))
+        x = F.max_pool2d(x, kernel_size=mp_ks, stride=mp_strd)
+
+        x = self.prelu3_1(self.conv5(x))
+        x = self.prelu3_2(self.conv6(x))
+        x = F.max_pool2d(x, kernel_size=mp_ks, stride=mp_strd)
+
+        x = x.view(-1, 3*3*512) # Flatten
+
+        features3d = self.fc1(x)
+        # features2d = self.fc2(features3d)
+        x = F.prelu(features3d, self.prelu_weight)
+
+        x = self.fc3(x)
+        
+        return features3d, x
+
 
 
 class LMCL_loss(nn.Module):
@@ -82,11 +129,11 @@ class LMCL_loss(nn.Module):
 
         norms_c = torch.norm(self.centers, p=2, dim=-1, keepdim=True)
         ncenters = torch.div(self.centers, norms_c)
-        logits = torch.matmul(nfeat, torch.transpose(ncenters, 0, 1))
+        logits = torch.matmul(nfeat.cpu(), torch.transpose(ncenters, 0, 1))
 
         y_onehot = torch.FloatTensor(batch_size, self.num_classes)
         y_onehot.zero_()
-        y_onehot = Variable(y_onehot).cuda()
+        y_onehot = Variable(y_onehot).cpu()
         y_onehot.scatter_(1, torch.unsqueeze(label, dim=-1), self.m)
         margin_logits = self.s * (logits - y_onehot)
 
@@ -117,7 +164,7 @@ def test(test_loder, criterion, model, use_cuda):
         if use_cuda:
             data = data.cuda()
             target = target.cuda()
-        data, target = Variable(data), Variable(target)
+        data, target = Variable(data), Variable(target).cpu()
 
         feats, _ = model(data)
         logits, mlogits = criterion[1](feats, target)
@@ -135,7 +182,7 @@ def train(train_loader, model, criterion, optimizer, epoch, loss_weight, use_cud
         if use_cuda:
             data = data.cuda()
             target = target.cuda()
-        data, target = Variable(data), Variable(target)
+        data, target = Variable(data), Variable(target).cpu()
 
         feats, _ = model(data)
         logits, mlogits = criterion[1](feats, target)
@@ -172,12 +219,12 @@ else:
 trainset = datasets.MNIST('./data/', download=True, train=True, transform=transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize((0.1307,), (0.3081,))]))
-train_loader = DataLoader(trainset, batch_size=100, shuffle=True, num_workers=4)
+train_loader = DataLoader(trainset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4)
 
 testset = datasets.MNIST('./data/', download=True, train=False, transform=transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize((0.1307,), (0.3081,))]))
-test_loader = DataLoader(testset, batch_size=100, shuffle=True, num_workers=4)
+test_loader = DataLoader(testset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4)
 
 # Model
 model = Net()
@@ -186,10 +233,10 @@ model = Net()
 nllloss = nn.CrossEntropyLoss()
 # CenterLoss
 loss_weight = 0.1
-lmcl_loss = LMCL_loss(num_classes=10, feat_dim=2)
+lmcl_loss = LMCL_loss(num_classes=10, feat_dim=FEATURES_DIM)
 if use_cuda:
     nllloss = nllloss.cuda()
-    coco_loss = lmcl_loss.cuda()
+    # coco_loss = lmcl_loss.cuda()
     model = model.cuda()
 criterion = [nllloss, lmcl_loss]
 # optimzer4nn
@@ -205,6 +252,7 @@ for epoch in range(20):
     # print optimizer4nn.param_groups[0]['lr']
     train(train_loader, model, criterion, [optimizer4nn, optimzer4center], epoch + 1, loss_weight, use_cuda)
     test(test_loader, criterion, model, use_cuda)
+    
 torch.save(model.state_dict(),"mnist_cnn-cosface.pt")        
-
+torch.save(lmcl_loss.state_dict(),"mnist_loss-cosface.pt")        
 
