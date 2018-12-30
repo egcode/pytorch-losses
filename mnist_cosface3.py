@@ -97,7 +97,6 @@ class LMCL_loss(nn.Module):
         self.device = device
 
     def forward(self, feat, label):
-        bp()
         batch_size = feat.shape[0]
         norms = torch.norm(feat, p=2, dim=-1, keepdim=True)
         nfeat = torch.div(feat, norms)
