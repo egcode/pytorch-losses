@@ -88,7 +88,7 @@ class Arcface_loss(nn.Module):
             cos(theta + m)
         """
     # def __init__(self, num_classes=NUM_CLASSES, feat_dim=FEATURES_DIM, s=7.00, m=0.2):
-    def __init__(self, feat_dim, num_classes, device, s=7., m=0.50, easy_margin=False):
+    def __init__(self, feat_dim, num_classes, device, s=0.5, m=0.2, easy_margin=False):
         super(Arcface_loss, self).__init__()
         self.feat_dim = feat_dim
         self.num_classes = num_classes
