@@ -193,39 +193,36 @@ class Net(nn.Module):
         return features3d, x
         
 class LMCL_loss(nn.Module):
-    """
-        Refer to paper:
-        Hao Wang, Yitong Wang, Zheng Zhou, Xing Ji, Dihong Gong, Jingchao Zhou,Zhifeng Li, and Wei Liu
-        CosFace: Large Margin Cosine Loss for Deep Face Recognition. CVPR2018
-        re-implement by yirong mao
-        2018 07/02
-        """
-
+    
     def __init__(self, num_classes, feat_dim, device, s=7.00, m=0.2):
         super(LMCL_loss, self).__init__()
         self.feat_dim = feat_dim
         self.num_classes = num_classes
         self.s = s
         self.m = m
-        self.centers = nn.Parameter(torch.randn(num_classes, feat_dim))
+        self.weights = nn.Parameter(torch.randn(num_classes, feat_dim))
         self.device = device
+        self.s_m = s*m
 
     def forward(self, feat, label):
         batch_size = feat.shape[0]
         norms = torch.norm(feat, p=2, dim=-1, keepdim=True)
-        nfeat = torch.div(feat, norms)
+        feat_l2norm = torch.div(feat, norms)
+        feat_l2norm = feat_l2norm * self.s
 
-        norms_c = torch.norm(self.centers, p=2, dim=-1, keepdim=True)
-        ncenters = torch.div(self.centers, norms_c)
-        logits = torch.matmul(nfeat, torch.transpose(ncenters, 0, 1))
+        norms_w = torch.norm(self.weights, p=2, dim=-1, keepdim=True)
+        weights_l2norm = torch.div(self.weights, norms_w)
+        
+        fc7 = torch.matmul(feat_l2norm, torch.transpose(weights_l2norm, 0, 1))
 
         y_onehot = torch.FloatTensor(batch_size, self.num_classes).to(self.device)
         y_onehot.zero_()
         y_onehot = Variable(y_onehot)
-        y_onehot.scatter_(1, torch.unsqueeze(label, dim=-1), self.m)
-        margin_logits = self.s * (logits - y_onehot)
+        y_onehot.scatter_(1, torch.unsqueeze(label, dim=-1), self.s_m)
+        output = fc7 - y_onehot
 
-        return logits, margin_logits
+        return output
+
 
  
 ##### EXAMPLE
@@ -287,7 +284,7 @@ if __name__ == '__main__':
     lmcl_loss.to(device)
 
     features3d, pr = model(image_tensor)
-    logits, mlogits = lmcl_loss(features3d, torch.unsqueeze(label_tensor, dim=-1))
+    logits = lmcl_loss(features3d, torch.unsqueeze(label_tensor, dim=-1))
     _, prediction = torch.max(logits.data, 1)
     prediction = prediction.cpu().detach().numpy()[0]
 
@@ -302,7 +299,7 @@ if __name__ == '__main__':
         image_tensor, label_tensor = image_tensor.to(device), label_tensor.to(device)
 
         features3d, pr  = model(image_tensor)
-        logits, mlogits = lmcl_loss(features3d, torch.unsqueeze(label_tensor, dim=-1))
+        logits = lmcl_loss(features3d, torch.unsqueeze(label_tensor, dim=-1))
         _, prediction = torch.max(logits.data, 1)
 
         f3d.append(features3d[0].cpu().detach().numpy())
