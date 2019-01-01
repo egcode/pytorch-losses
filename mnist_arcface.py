@@ -76,7 +76,8 @@ class Net(nn.Module):
         return features3d, x
 
 
-
+# s >= C-1/C  *  log(  (C-1)*P) / (1-P)  )
+# s >= 10-1/10  *  log( (10-1)*0.8) / (1-0.8)  )= 0.9 * log(36) = 0.9 * 3.583 = 3.22516
 class Arcface_loss(nn.Module):
     r"""Implement of large margin arc distance: :
         Args:
@@ -88,7 +89,7 @@ class Arcface_loss(nn.Module):
             cos(theta + m)
         """
     # def __init__(self, num_classes=NUM_CLASSES, feat_dim=FEATURES_DIM, s=7.00, m=0.2):
-    def __init__(self, feat_dim, num_classes, device, s=0.5, m=0.2, easy_margin=False):
+    def __init__(self, feat_dim, num_classes, device, s=3.3, m=0.2, easy_margin=False):
         super(Arcface_loss, self).__init__()
         self.feat_dim = feat_dim
         self.num_classes = num_classes
