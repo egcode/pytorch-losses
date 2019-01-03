@@ -100,11 +100,14 @@ class LMCL_loss(nn.Module):
         norms_w = torch.norm(self.weights, p=2, dim=-1, keepdim=True)
         weights_l2norm = torch.div(self.weights, norms_w)
         
+        eps = 1e-4
+        feat_l2norm = feat_l2norm.clamp(min=-1+eps, max=1-eps) # for numerical stability
+        weights_l2norm = weights_l2norm.clamp(min=-1+eps, max=1-eps) # for numerical stability
         fc7 = torch.matmul(feat_l2norm, torch.transpose(weights_l2norm, 0, 1))
-        fc7 = fc7.clamp(min=1e-13, max=1e+13) # for numerical stability
+        fc7 = fc7.clamp(min=-1+eps, max=1-eps) # for numerical stability
+        # bp()
 
 
-        
         # y_onehot = torch.FloatTensor(batch_size, self.num_classes).to(self.device)
         # y_onehot.zero_()
         # y_onehot = Variable(y_onehot)
@@ -119,11 +122,13 @@ class LMCL_loss(nn.Module):
         target_one_hot = torch.zeros(len(label), NUM_OF_CLASSES).scatter_(1, label.unsqueeze(1), 1.)        
         zy = torch.addcmul(torch.zeros(fc7.size()), 1., fc7, target_one_hot)
         zy = zy.sum(-1)
+        zy = zy.clamp(min=-1+eps, max=1-eps) # for numerical stability
 
         cos_t = zy/self.s
 
         t = torch.acos(cos_t)
         t = t+self.m
+        t = t.clamp(min=-1+eps, max=1-eps) # for numerical stability
 
         body = torch.cos(t)
         new_zy = body*self.s
@@ -149,10 +154,12 @@ class LMCL_loss(nn.Module):
         diff = new_zy - zy
         # diff = mx.sym.expand_dims(diff, 1)
         diff = diff.unsqueeze(1)
+        diff = diff.clamp(min=-1+eps, max=1-eps) # for numerical stability
 
         # gt_one_hot = mx.sym.one_hot(gt_label, depth = args.num_classes, on_value = 1.0, off_value = 0.0)
         # body = mx.sym.broadcast_mul(gt_one_hot, diff)
         body = torch.addcmul(torch.zeros(diff.size()), 1., diff, target_one_hot)
+        body = body.clamp(min=-1+eps, max=1-eps) # for numerical stability
 
         output = fc7+body
 
