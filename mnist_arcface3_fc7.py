@@ -92,28 +92,19 @@ class LMCL_loss(nn.Module):
         self.threshold = math.cos(math.pi-m)
 
     def forward(self, feat, label, easy_margin=False):
+        eps = 1e-4
         batch_size = feat.shape[0]
         norms = torch.norm(feat, p=2, dim=-1, keepdim=True)
         feat_l2norm = torch.div(feat, norms)
+        feat_l2norm = feat_l2norm.clamp(min=-1+eps, max=1-eps) # for numerical stability
         feat_l2norm = feat_l2norm * self.s
 
         norms_w = torch.norm(self.weights, p=2, dim=-1, keepdim=True)
         weights_l2norm = torch.div(self.weights, norms_w)
-        
-        eps = 1e-4
-        feat_l2norm = feat_l2norm.clamp(min=-1+eps, max=1-eps) # for numerical stability
         weights_l2norm = weights_l2norm.clamp(min=-1+eps, max=1-eps) # for numerical stability
+
         fc7 = torch.matmul(feat_l2norm, torch.transpose(weights_l2norm, 0, 1))
-        fc7 = fc7.clamp(min=-1+eps, max=1-eps) # for numerical stability
-        # bp()
-
-
-        # y_onehot = torch.FloatTensor(batch_size, self.num_classes).to(self.device)
-        # y_onehot.zero_()
-        # y_onehot = Variable(y_onehot)
-        # y_onehot.scatter_(1, torch.unsqueeze(label, dim=-1), self.s_m)
-        # output = fc7 - y_onehot
-
+        # fc7 = fc7.clamp(min=-1+eps, max=1-eps) # for numerical stability
 
         # zy = mx.sym.pick(fc7, gt_label, axis=1)
         label = label.cpu()
@@ -122,47 +113,31 @@ class LMCL_loss(nn.Module):
         target_one_hot = torch.zeros(len(label), NUM_OF_CLASSES).scatter_(1, label.unsqueeze(1), 1.)        
         zy = torch.addcmul(torch.zeros(fc7.size()), 1., fc7, target_one_hot)
         zy = zy.sum(-1)
-        zy = zy.clamp(min=-1+eps, max=1-eps) # for numerical stability
+        # zy = zy.clamp(min=-1+eps, max=1-eps) # for numerical stability
 
         cos_t = zy/self.s
+        cos_t = cos_t.clamp(min=-1+eps, max=1-eps) # for numerical stability
 
         t = torch.acos(cos_t)
-        t = t+self.m
         t = t.clamp(min=-1+eps, max=1-eps) # for numerical stability
+        t = t+self.m
 
         body = torch.cos(t)
+        body = body.clamp(min=-1+eps, max=1-eps) # for numerical stability
         new_zy = body*self.s
 
-
-
-
-        # body = cos_t*cos_t
-        # body = 1.0-body
-        # sin_t = torch.sqrt(body)
-        # new_zy = cos_t*self.cos_m
-        # b = sin_t*self.sin_m
-        # new_zy = new_zy - b
-        # new_zy = new_zy*self.s
-        # if easy_margin:
-        #     zy_keep = zy
-        # else:
-        #     zy_keep = zy - self.s*self.mm
-
-        # # bp()
-        # new_zy = torch.where(cond.byte(), new_zy, zy_keep)
 
         diff = new_zy - zy
         # diff = mx.sym.expand_dims(diff, 1)
         diff = diff.unsqueeze(1)
-        diff = diff.clamp(min=-1+eps, max=1-eps) # for numerical stability
+        # diff = diff.clamp(min=-1+eps, max=1-eps) # for numerical stability
 
         # gt_one_hot = mx.sym.one_hot(gt_label, depth = args.num_classes, on_value = 1.0, off_value = 0.0)
         # body = mx.sym.broadcast_mul(gt_one_hot, diff)
         body = torch.addcmul(torch.zeros(diff.size()), 1., diff, target_one_hot)
-        body = body.clamp(min=-1+eps, max=1-eps) # for numerical stability
+        # body = body.clamp(min=-1+eps, max=1-eps) # for numerical stability
 
         output = fc7+body
-
 
         return output.to(self.device)
 
