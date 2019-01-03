@@ -116,7 +116,7 @@ class LMCL_loss(nn.Module):
         # zy = zy.clamp(min=-1+eps, max=1-eps) # for numerical stability
 
         cos_t = zy/self.s
-        cos_t = cos_t.clamp(min=-1+eps, max=1-eps) # for numerical stability
+        # cos_t = cos_t.clamp(min=-1+eps, max=1-eps) # for numerical stability
 
         t = torch.acos(cos_t)
         t = t.clamp(min=-1+eps, max=1-eps) # for numerical stability
