@@ -151,13 +151,7 @@ class LMCL_loss(nn.Module):
 
         # gt_one_hot = mx.sym.one_hot(gt_label, depth = args.num_classes, on_value = 1.0, off_value = 0.0)
         # body = mx.sym.broadcast_mul(gt_one_hot, diff)
-
-        gt_one_hot = torch.FloatTensor(batch_size, self.num_classes).cpu()
-        gt_one_hot.zero_()
-        gt_one_hot = Variable(gt_one_hot)
-        gt_one_hot.scatter_(1, torch.unsqueeze(label, dim=-1), 1.)
-
-        body = torch.addcmul(torch.zeros(diff.size()), 1., diff, gt_one_hot)
+        body = torch.addcmul(torch.zeros(diff.size()), 1., diff, target_one_hot)
 
         output = fc7+body
 
