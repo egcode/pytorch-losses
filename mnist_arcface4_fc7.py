@@ -238,11 +238,11 @@ loss_arcface = Arcface_loss(num_classes=10, feat_dim=FEATURES_DIM, device=device
 
 # optimzer nn
 optimizer_nn = optim.SGD(model.parameters(), lr=0.001, momentum=0.9, weight_decay=0.0005)
-sheduler_nn = lr_scheduler.StepLR(optimizer_nn, 20, gamma=0.5)
+sheduler_nn = lr_scheduler.StepLR(optimizer_nn, 20, gamma=0.1)
 
 # optimzer cosface or arcface
 optimzer_arcface = optim.SGD(loss_arcface.parameters(), lr=0.01)
-sheduler_arcface = lr_scheduler.StepLR(optimzer_arcface, 20, gamma=0.5)
+sheduler_arcface = lr_scheduler.StepLR(optimzer_arcface, 20, gamma=0.1)
 
 
 for epoch in range(1, EPOCHS + 1):
