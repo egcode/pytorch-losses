@@ -221,7 +221,7 @@ for epoch in range(1, EPOCHS + 1):
     test(model, device, test_loader, loss_softmax, loss_arcface)
 
 tototal_time = int(time.time() - t)
-print('Total time: {}'.format(timedelta(seconds=time_for_epoch)))
+print('Total time: {}'.format(timedelta(seconds=tototal_time)))
 
 torch.save(model.state_dict(),"mnist_cnn-arcface.pt")        
 torch.save(loss_arcface.state_dict(),"mnist_loss-arcface.pt")        
